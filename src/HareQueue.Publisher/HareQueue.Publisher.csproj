@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\HareQueue.RabbitMq\HareQueue.RabbitMq.csproj" />
+    <ProjectReference Include="..\HareQueue.RabbitMq\HareQueue.RabbitMq.csproj" />
   </ItemGroup>
 
 </Project>
