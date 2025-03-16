@@ -40,7 +40,7 @@ public class ConsumerServer : IHostedService
                 throw new Exception($"O tipo {consumerHandlerType.FullName} não foi inicializado no DI.");
 
             var queueConsumerType = typeof(QueueConsumer<>).MakeGenericType(handlerGenericType);                  
-            IQueueConsumer queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, consumerHandler);
+            IQueueConsumer queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, [consumerHandler, _serviceProvider]);
 
             await queueConsumer.InitializeAsync(cancellationToken);
 
