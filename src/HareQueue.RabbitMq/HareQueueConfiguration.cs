@@ -1,12 +1,8 @@
 ﻿using HareQueue.RabbitMq.Consumer;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+
 
 namespace HareQueue.RabbitMq
 {
@@ -15,6 +11,7 @@ namespace HareQueue.RabbitMq
         public static IServiceCollection AddHareQueue(this IServiceCollection services, Assembly assembly)
         {
             services.AddHostedService(sp => new ConsumerServer(assembly, sp));
+            services.AddHandlers(assembly);
             services.AddRabbitMq();
 
             return services;
@@ -32,15 +29,41 @@ namespace HareQueue.RabbitMq
                 };
             });
 
-
             services.AddSingleton(sp =>
             {
                 var connectionFactory = sp.GetRequiredService<IConnectionFactory>();
 
-                return connectionFactory.CreateConnectionAsync().Result;                
+                return connectionFactory.CreateConnectionAsync().Result;
             });
 
             return services;
         }
+
+        public static IServiceCollection AddHandlers(this IServiceCollection services, Assembly assembly)
+        {
+            var consumerHandlerTypes = assembly
+                .DefinedTypes
+                .Where(IsAssignableToType<IConsumerHandler>);
+
+            foreach (var handlerType in consumerHandlerTypes)
+            {
+                var handlerInterface = handlerType
+                        .GetInterfaces()
+                        .Where(handler => handler.IsGenericType)
+                        .FirstOrDefault();
+
+                var handlerGenericType = handlerInterface.GetGenericArguments().First()!;
+                var consumerHandlerType = typeof(IConsumerHandler<>).MakeGenericType(handlerGenericType);
+
+                services.AddScoped(consumerHandlerType, handlerType);                
+            }
+
+            return services;
+        }
+
+        private static bool IsAssignableToType<T>(TypeInfo typeInfo)
+            => typeof(T).IsAssignableFrom(typeInfo) &&
+                !typeInfo.IsAbstract &&
+                !typeInfo.IsInterface;
     }
 }
