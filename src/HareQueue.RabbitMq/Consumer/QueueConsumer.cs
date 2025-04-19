@@ -1,5 +1,7 @@
-﻿using System;
-using HareQueue.RabbitMq.Abstractions;
+﻿using HareQueue.RabbitMq.Abstractions;
+using HareQueue.RabbitMq.Abstractions.Consumer;
+using HareQueue.RabbitMq.Consumer.Dispatch;
+using HareQueue.RabbitMq.Serializer;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -13,25 +15,29 @@ public interface IQueueConsumer : IHostedAmqpConsumer
 };
 
 public class QueueConsumer<TMessage> : IQueueConsumer
+    where TMessage : IIntegrationEvent
 {
-    public readonly IServiceProvider _serviceProvider;
-    private readonly IConsumerHandler<TMessage> _consumerHandler;
+    public readonly IServiceProvider ServiceProvider;
+    private readonly Delegate _handler;
     private readonly string _consumerName;
-    private IConnection Connection;
-    private IChannel Channel;
-    private string Queue;
-    private string Exchange;
-    private string RoutingKey;
-    private string ConsumerTag;
-    private AsyncEventingBasicConsumer AsyncBasicConsumer;
-    private CancellationTokenSource CancellationTokenSource;
+    private IConnection _connection;
+    private IChannel _channel;
+    private string _queue;
+    private string _exchange;
+    private string _routingKey;
+    private string _consumerTag;
+    private Dispatcher _dispatcher;
+    private AsyncEventingBasicConsumer _asyncBasicConsumer;
+    private CancellationTokenSource _cancellationTokenSource;
+    private IAmqpSerializer _serializer;
 
     public bool IsInitialized { get; private set; }
 
-    public QueueConsumer(IConsumerHandler<TMessage> consumerHandler, IServiceProvider serviceProvider)
+    public QueueConsumer(Delegate handler, IAmqpSerializer serializer, IServiceProvider serviceProvider)
     {
-        _consumerHandler = consumerHandler;
-        _serviceProvider = serviceProvider;
+        _handler = handler;
+        _serializer = serializer;
+        ServiceProvider = serviceProvider;
         _consumerName = typeof(TMessage).Name;
     }
 
@@ -39,21 +45,23 @@ public class QueueConsumer<TMessage> : IQueueConsumer
     {
         if (IsInitialized) throw new InvalidOperationException("O consumer já foi inicializado!");
 
-        Queue = $"{_consumerName}-queue";
-        Exchange = $"{_consumerName}-exchange";
-        RoutingKey = $"{_consumerName}-routingKey";
+        _queue = $"{_consumerName}-queue";
+        _exchange = $"{_consumerName}-exchange";
+        _routingKey = $"{_consumerName}-routingKey";
 
-        Connection = _serviceProvider.GetRequiredService<IConnection>();
+        _dispatcher = new Dispatcher(_handler);
 
-        if (Connection is null)
+        _connection = ServiceProvider.GetRequiredService<IConnection>();
+
+        if (_connection is null)
             throw new Exception("Conexão com RabbitMq n'ao inicializada");
 
-        Channel = await Connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
-        await Channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
+        await _channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: cancellationToken);
 
-        AsyncBasicConsumer = new AsyncEventingBasicConsumer(Channel);
-        AsyncBasicConsumer.ReceivedAsync += ReceiveAsync;
+        _asyncBasicConsumer = new AsyncEventingBasicConsumer(_channel);
+        _asyncBasicConsumer.ReceivedAsync += ReceiveAsync;
 
         IsInitialized = true;
     }
@@ -62,22 +70,22 @@ public class QueueConsumer<TMessage> : IQueueConsumer
     {
         if (!IsInitialized) throw new InvalidOperationException("O consumer não foi inicializado!");
 
-        CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await Channel.ExchangeDeclareAsync(exchange: Exchange, durable: true, type: "direct", autoDelete: false);
+        await _channel.ExchangeDeclareAsync(exchange: _exchange, durable: true, type: "direct", autoDelete: false);
 
-        await Channel.QueueDeclareAsync(queue: Queue, durable: true, exclusive: false, autoDelete: false);
+        await _channel.QueueDeclareAsync(queue: _queue, durable: true, exclusive: false, autoDelete: false);
 
-        await Channel.QueueBindAsync(queue: $"{_consumerName}-queue", exchange: $"{_consumerName}-exchange", routingKey: $"{_consumerName}-routingKey");
+        await _channel.QueueBindAsync(queue: _queue, exchange: _exchange, routingKey: _routingKey);
 
-        ConsumerTag = await Channel.BasicConsumeAsync(
-            queue: Queue,
+        _consumerTag = await _channel.BasicConsumeAsync(
+            queue: _queue,
             autoAck: false,
-            consumer: AsyncBasicConsumer,
+            consumer: _asyncBasicConsumer,
             arguments: null,
             exclusive: false,
-            cancellationToken: CancellationTokenSource.Token,
-            consumerTag: ConsumerTag,
+            cancellationToken: _cancellationTokenSource.Token,
+            consumerTag: _consumerTag,
             noLocal: true
         );
     }
@@ -90,7 +98,11 @@ public class QueueConsumer<TMessage> : IQueueConsumer
 
     private Task ReceiveAsync(object sender, BasicDeliverEventArgs eventArgs)
     {
-        return Task.CompletedTask;
+        var message = _serializer.Deserialize<TMessage>(eventArgs);
+
+        IAmqpContext context = new AmqpContext(eventArgs, _channel, _connection, _queue, message, _cancellationTokenSource.Token);
+
+        _dispatcher.DispatchAsync(context);
     }
 
     public ValueTask DisposeAsync()

@@ -1,7 +1,9 @@
 ﻿using HareQueue.RabbitMq.Consumer;
+using HareQueue.RabbitMq.Serializer;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 using System.Reflection;
+using System.Text.Json;
 
 
 namespace HareQueue.RabbitMq
@@ -13,6 +15,12 @@ namespace HareQueue.RabbitMq
             services.AddHostedService(sp => new ConsumerServer(assembly, sp));
             services.AddHandlers(assembly);
             services.AddRabbitMq();
+
+            //TODO: deixar configuravel
+            services.AddAmqpSerializer(new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,                
+            });
 
             return services;
         }

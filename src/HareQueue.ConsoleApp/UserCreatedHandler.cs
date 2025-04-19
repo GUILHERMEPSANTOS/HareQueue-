@@ -4,7 +4,7 @@ namespace HareQueue.ConsoleApp
 {
     class UserCreatedHandler : IConsumerHandler<UserCreatedEvent>
     {
-        public Task Handle(UserCreatedEvent message)
+        public Task Handle(UserCreatedEvent message, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
