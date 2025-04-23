@@ -14,8 +14,8 @@ public interface IQueueConsumer : IHostedAmqpConsumer
     Task InitializeAsync(CancellationToken cancellationToken);
 };
 
-public class QueueConsumer<TMessage> : IQueueConsumer
-    where TMessage : IIntegrationEvent
+public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
+    where TIntegrationEvent : IIntegrationEvent
 {
     public readonly IServiceProvider ServiceProvider;
     private readonly Delegate _handler;
@@ -26,7 +26,7 @@ public class QueueConsumer<TMessage> : IQueueConsumer
     private string _exchange;
     private string _routingKey;
     private string _consumerTag;
-    private Dispatcher _dispatcher;
+    private Dispatcher<TIntegrationEvent> _dispatcher;
     private AsyncEventingBasicConsumer _asyncBasicConsumer;
     private CancellationTokenSource _cancellationTokenSource;
     private IAmqpSerializer _serializer;
@@ -38,7 +38,7 @@ public class QueueConsumer<TMessage> : IQueueConsumer
         _handler = handler;
         _serializer = serializer;
         ServiceProvider = serviceProvider;
-        _consumerName = typeof(TMessage).Name;
+        _consumerName = typeof(TIntegrationEvent).Name;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
@@ -49,7 +49,7 @@ public class QueueConsumer<TMessage> : IQueueConsumer
         _exchange = $"{_consumerName}-exchange";
         _routingKey = $"{_consumerName}-routingKey";
 
-        _dispatcher = new Dispatcher(_handler);
+        _dispatcher = new Dispatcher<TIntegrationEvent>(_handler);
 
         _connection = ServiceProvider.GetRequiredService<IConnection>();
 
@@ -96,13 +96,13 @@ public class QueueConsumer<TMessage> : IQueueConsumer
     }
 
 
-    private Task ReceiveAsync(object sender, BasicDeliverEventArgs eventArgs)
+    private async Task ReceiveAsync(object sender, BasicDeliverEventArgs eventArgs)
     {
-        var message = _serializer.Deserialize<TMessage>(eventArgs);
+        var message = _serializer.Deserialize<TIntegrationEvent>(eventArgs);
 
         IAmqpContext context = new AmqpContext(eventArgs, _channel, _connection, _queue, message, _cancellationTokenSource.Token);
 
-        _dispatcher.DispatchAsync(context);
+      await _dispatcher.DispatchAsync(context);
     }
 
     public ValueTask DisposeAsync()

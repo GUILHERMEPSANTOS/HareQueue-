@@ -1,4 +1,6 @@
 ﻿using HareQueue.RabbitMq.Abstractions;
+using HareQueue.RabbitMq.Abstractions.Consumer;
+using HareQueue.RabbitMq.Arguments;
 
 namespace HareQueue.RabbitMq.Consumer.Dispatch
 {
@@ -7,23 +9,26 @@ namespace HareQueue.RabbitMq.Consumer.Dispatch
         Task DispatchAsync(IAmqpContext context);
     }
 
-    public class Dispatcher : IDispatcher
+    public class Dispatcher<TIntegrationEvent> : IDispatcher
+        where TIntegrationEvent : IIntegrationEvent
     {
         private readonly Delegate _handler;
-        
 
         public Dispatcher(Delegate handler)
         {
             _handler = handler;
-            
-
         }
 
-        public Task DispatchAsync(IAmqpContext context)
+        public async Task DispatchAsync(IAmqpContext context)
         {
-        //    _handler.DynamicInvoke(context.Message, context.CancellationToken);
+            var amqpArgument = new AmqpArgument<TIntegrationEvent>(context);
 
-            return Task.CompletedTask;
+            _handler.DynamicInvoke(amqpArgument.GetValue(), context.CancellationToken);
+
+            await context.Channel.BasicAckAsync(
+                deliveryTag: context.Request.DeliveryTag,
+                multiple: false
+            );
         }
     }
 }

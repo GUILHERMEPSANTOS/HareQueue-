@@ -7,9 +7,16 @@ namespace HareQueue.RabbitMq.Arguments
     public class AmqpArgument<TIntegrationEvent> : IAmqpArgument<TIntegrationEvent>
         where TIntegrationEvent : IIntegrationEvent
     {
-        public TIntegrationEvent GetValue(IAmqpContext context)
+        private readonly IAmqpContext _context;
+
+        public AmqpArgument(IAmqpContext context)
         {
-            throw new NotImplementedException();
+            _context = context;
+        }
+
+        public TIntegrationEvent GetValue()
+        {
+            return (TIntegrationEvent)_context.MessageObject;
         }
     }
 }
