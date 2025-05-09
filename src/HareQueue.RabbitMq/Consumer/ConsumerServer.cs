@@ -1,6 +1,8 @@
+using HareQueue.RabbitMq.Context;
 using HareQueue.RabbitMq.Serializer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using RabbitMQ.Client;
 using System.Reflection;
 
 namespace HareQueue.RabbitMq.Consumer;
@@ -25,6 +27,7 @@ public class ConsumerServer : IHostedService
         if (consumerHandlerTypes.Count() == 0)
             throw new Exception($"Não existe nenhum Handler no Assembly: {_assembly.FullName}");
 
+      
         foreach (var handlerType in consumerHandlerTypes)
         {
             var handlerInterface = handlerType
@@ -48,9 +51,12 @@ public class ConsumerServer : IHostedService
             var handleDelegate = Delegate.CreateDelegate(handleDelegateType, consumerHandler, method);
 
             var serializer = _serviceProvider.GetRequiredService<IAmqpSerializer>();
-
             var queueConsumerType = typeof(QueueConsumer<>).MakeGenericType(handlerGenericType);
-            IQueueConsumer queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, [handleDelegate, serializer, _serviceProvider])!;
+
+            var connection = _serviceProvider.GetRequiredService<IConnection>();
+
+            IChannelContext channel = new RabbitMqChannelContext(connection);
+            IQueueConsumer queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, [handleDelegate, serializer, channel])!;
 
             await queueConsumer.InitializeAsync(cancellationToken);
 

@@ -1,9 +1,9 @@
 ﻿using HareQueue.RabbitMq.Abstractions;
 using HareQueue.RabbitMq.Abstractions.Consumer;
 using HareQueue.RabbitMq.Consumer.Dispatch;
+using HareQueue.RabbitMq.Context;
 using HareQueue.RabbitMq.Serializer;
-using Microsoft.Extensions.DependencyInjection;
-using RabbitMQ.Client;
+using HareQueue.RabbitMq.Topology;
 using RabbitMQ.Client.Events;
 
 namespace HareQueue.RabbitMq.Consumer;
@@ -17,82 +17,67 @@ public interface IQueueConsumer : IHostedAmqpConsumer
 public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     where TIntegrationEvent : IIntegrationEvent
 {
-    public readonly IServiceProvider ServiceProvider;
     private readonly Delegate _handler;
-    private readonly string _consumerName;
-    private IConnection _connection;
-    private IChannel _channel;
-    private string _queue;
-    private string _exchange;
-    private string _routingKey;
-    private string _consumerTag;
+    private readonly TopologyConfig<TIntegrationEvent> _topologyConfig;
+    private readonly IChannelContext _channelContext;
     private Dispatcher<TIntegrationEvent> _dispatcher;
-    private AsyncEventingBasicConsumer _asyncBasicConsumer;
     private CancellationTokenSource _cancellationTokenSource;
     private IAmqpSerializer _serializer;
+    private bool _isConsuming { get; set; }
+    private bool _isInitialized { get; set; }
 
-    public bool IsInitialized { get; private set; }
-
-    public QueueConsumer(Delegate handler, IAmqpSerializer serializer, IServiceProvider serviceProvider)
+    public QueueConsumer(
+        Delegate handler,
+        IAmqpSerializer serializer,
+        IChannelContext channelContext)
     {
         _handler = handler;
         _serializer = serializer;
-        ServiceProvider = serviceProvider;
-        _consumerName = typeof(TIntegrationEvent).Name;
+        _topologyConfig = new TopologyConfig<TIntegrationEvent>();
+        _channelContext = channelContext;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        if (IsInitialized) throw new InvalidOperationException("O consumer já foi inicializado!");
-
-        _queue = $"{_consumerName}-queue";
-        _exchange = $"{_consumerName}-exchange";
-        _routingKey = $"{_consumerName}-routingKey";
+        if (_isInitialized) throw new InvalidOperationException("O consumer já foi inicializado!");
 
         _dispatcher = new Dispatcher<TIntegrationEvent>(_handler);
 
-        _connection = ServiceProvider.GetRequiredService<IConnection>();
+        if (_channelContext is null)
+            throw new Exception("channel com RabbitMq não inicializada");
 
-        if (_connection is null)
-            throw new Exception("Conexão com RabbitMq n'ao inicializada");
+        await _channelContext.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: cancellationToken);
 
-        _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
-
-        await _channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: cancellationToken);
-
-        _asyncBasicConsumer = new AsyncEventingBasicConsumer(_channel);
-        _asyncBasicConsumer.ReceivedAsync += ReceiveAsync;
-
-        IsInitialized = true;
+        _channelContext.ReceivedAsync += ReceiveAsync;
+        _isInitialized = true;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!IsInitialized) throw new InvalidOperationException("O consumer não foi inicializado!");
+        if (!_isInitialized) throw new InvalidOperationException("O consumer não foi inicializado!");
 
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await _channel.ExchangeDeclareAsync(exchange: _exchange, durable: true, type: "direct", autoDelete: false);
+        await _channelContext.ExchangeDeclareAsync(exchange: _topologyConfig.Exchange, durable: true, type: Context.ExchangeType.Direct, autoDelete: false);
+        await _channelContext.QueueDeclareAsync(queue: _topologyConfig.Queue, durable: true, exclusive: false, autoDelete: false);
+        await _channelContext.QueueBindAsync(queue: _topologyConfig.Queue, exchange: _topologyConfig.Exchange, routingKey: _topologyConfig.RoutingKey);
+        await _channelContext.BasicConsumeAsync(
+           queue: _topologyConfig.Queue,
+           autoAck: false,
+           arguments: null,
+           exclusive: false,
+           cancellationToken: _cancellationTokenSource.Token,
+           noLocal: true
+       );
 
-        await _channel.QueueDeclareAsync(queue: _queue, durable: true, exclusive: false, autoDelete: false);
-
-        await _channel.QueueBindAsync(queue: _queue, exchange: _exchange, routingKey: _routingKey);
-
-        _consumerTag = await _channel.BasicConsumeAsync(
-            queue: _queue,
-            autoAck: false,
-            consumer: _asyncBasicConsumer,
-            arguments: null,
-            exclusive: false,
-            cancellationToken: _cancellationTokenSource.Token,
-            consumerTag: _consumerTag,
-            noLocal: true
-        );
+        _isConsuming = true;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
-        return Task.CompletedTask;
+        if (!_isConsuming) return;
+
+        await _channelContext.BasicCancelAsync(cancellationToken: cancellationToken); ;
     }
 
 
@@ -100,9 +85,9 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     {
         var message = _serializer.Deserialize<TIntegrationEvent>(eventArgs);
 
-        IAmqpContext context = new AmqpContext(eventArgs, _channel, _connection, _queue, message, _cancellationTokenSource.Token);
+        IAmqpContext context = new AmqpContext(eventArgs, _channelContext.Channel, _channelContext.Connection, _topologyConfig.Queue, message, _cancellationTokenSource.Token);
 
-      await _dispatcher.DispatchAsync(context);
+        await _dispatcher.DispatchAsync(context);
     }
 
     public ValueTask DisposeAsync()
