@@ -1,82 +1,33 @@
-using HareQueue.RabbitMq.Context;
-using HareQueue.RabbitMq.Serializer;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using RabbitMQ.Client;
-using System.Reflection;
-
-namespace HareQueue.RabbitMq.Consumer;
 
 public class ConsumerServer : IHostedService
 {
-    public readonly Assembly _assembly;
-    public readonly IServiceProvider _serviceProvider;
+    private readonly IConsumerHandlerRegistry _registry;
 
-    public ConsumerServer(Assembly assembly, IServiceProvider serviceProvider)
+    public ConsumerServer(IConsumerHandlerRegistry registry)
     {
-        _assembly = assembly;
-        _serviceProvider = serviceProvider;
+        _registry = registry;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var consumerHandlerTypes = _assembly
-                .DefinedTypes
-                .Where(IsAssignableToType<IConsumerHandler>);
+        var consumers = _registry.ResolveConsumers().ToList();
 
-        if (consumerHandlerTypes.Count() == 0)
-            throw new Exception($"Não existe nenhum Handler no Assembly: {_assembly.FullName}");
+        if (!consumers?.Any() ?? false) 
+            throw new Exception("Nenhum consumer registrado.");
 
-      
-        foreach (var handlerType in consumerHandlerTypes)
+        foreach (var consumer in consumers)
         {
-            var handlerInterface = handlerType
-                    .GetInterfaces()
-                    .Where(handler => handler.IsGenericType)
-                    .FirstOrDefault();
+            await consumer.InitializeAsync(cancellationToken);
 
-            var handlerGenericType = handlerInterface.GetGenericArguments().First()!;
-
-            //TODO: verificar se o handler é um IntegrationEvent
-
-            var consumerHandlerType = typeof(IConsumerHandler<>).MakeGenericType(handlerGenericType);
-
-            var consumerHandler = _serviceProvider.GetRequiredService(consumerHandlerType);
-
-            if (consumerHandler is null)
-                throw new Exception($"O tipo {consumerHandlerType.FullName} não foi inicializado no DI.");
-
-            var method = handlerInterface.GetMethods().First().Name;
-            var handleDelegateType = typeof(Func<,,>).MakeGenericType(handlerGenericType, typeof(CancellationToken), typeof(Task));
-            var handleDelegate = Delegate.CreateDelegate(handleDelegateType, consumerHandler, method);
-
-            var serializer = _serviceProvider.GetRequiredService<IAmqpSerializer>();
-            var queueConsumerType = typeof(QueueConsumer<>).MakeGenericType(handlerGenericType);
-
-            var connection = _serviceProvider.GetRequiredService<IConnection>();
-
-            IChannelContext channel = new RabbitMqChannelContext(connection);
-            IQueueConsumer queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, [handleDelegate, serializer, channel])!;
-
-            await queueConsumer.InitializeAsync(cancellationToken);
-
-            _ = Task.Factory
-                    .StartNew(
-                        () => queueConsumer.StartAsync(cancellationToken),
-                        cancellationToken,
-                        TaskCreationOptions.LongRunning,
-                        TaskScheduler.Default
-                     );
+            _ = Task.Factory.StartNew(
+                () => consumer.StartAsync(cancellationToken),
+                cancellationToken,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default
+            );
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-
-    private static bool IsAssignableToType<T>(TypeInfo typeInfo)
-        => typeof(T).IsAssignableFrom(typeInfo) &&
-            !typeInfo.IsAbstract &&
-            !typeInfo.IsInterface;
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

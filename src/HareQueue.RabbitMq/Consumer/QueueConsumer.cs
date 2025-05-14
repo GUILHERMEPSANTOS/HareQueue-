@@ -58,7 +58,7 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
 
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await _channelContext.ExchangeDeclareAsync(exchange: _topologyConfig.Exchange, durable: true, type: Context.ExchangeType.Direct, autoDelete: false);
+        await _channelContext.ExchangeDeclareAsync(exchange: _topologyConfig.Exchange, durable: true, type: ExchangeType.Direct, autoDelete: false);
         await _channelContext.QueueDeclareAsync(queue: _topologyConfig.Queue, durable: true, exclusive: false, autoDelete: false);
         await _channelContext.QueueBindAsync(queue: _topologyConfig.Queue, exchange: _topologyConfig.Exchange, routingKey: _topologyConfig.RoutingKey);
         await _channelContext.BasicConsumeAsync(
@@ -92,6 +92,8 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
 
     public ValueTask DisposeAsync()
     {
+        _channelContext.Dispose();
+
         return ValueTask.CompletedTask;
     }
 }

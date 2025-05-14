@@ -3,7 +3,7 @@ using RabbitMQ.Client.Events;
 
 namespace HareQueue.RabbitMq.Context
 {
-    public interface IChannelContext
+    public interface IChannelContext : IDisposable
     {
         IChannel Channel { get; }
         IConnection Connection { get; }

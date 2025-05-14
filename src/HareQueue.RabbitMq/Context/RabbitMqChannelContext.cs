@@ -73,5 +73,10 @@ namespace HareQueue.RabbitMq.Context
         {
             await _channel.BasicQosAsync(prefetchSize: prefetchSize, prefetchCount: prefetchCount, global: global, cancellationToken: cancellationToken);
         }
+
+        public void Dispose()
+        {
+            if(_channel is { }) _channel.Dispose();                        
+        }
     }
 }

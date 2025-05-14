@@ -12,14 +12,14 @@ namespace HareQueue.RabbitMq
     {
         public static IServiceCollection AddHareQueue(this IServiceCollection services, Assembly assembly)
         {
-            services.AddHostedService(sp => new ConsumerServer(assembly, sp));
-            services.AddHandlers(assembly);
-            services.AddRabbitMq();
 
-            //TODO: deixar configuravel
+            services.AddScoped<IConsumerHandlerRegistry>(sp => new ConsumerHandlerRegistry(assembly, sp));
+            services.AddHostedService<ConsumerServer>();
+            services.AddHandlers(assembly);
+            services.AddRabbitMq();            
             services.AddAmqpSerializer(new JsonSerializerOptions
             {
-                PropertyNameCaseInsensitive = true,                
+                PropertyNameCaseInsensitive = true,
             });
 
             return services;
@@ -63,7 +63,7 @@ namespace HareQueue.RabbitMq
                 var handlerGenericType = handlerInterface.GetGenericArguments().First()!;
                 var consumerHandlerType = typeof(IConsumerHandler<>).MakeGenericType(handlerGenericType);
 
-                services.AddScoped(consumerHandlerType, handlerType);                
+                services.AddScoped(consumerHandlerType, handlerType);
             }
 
             return services;
