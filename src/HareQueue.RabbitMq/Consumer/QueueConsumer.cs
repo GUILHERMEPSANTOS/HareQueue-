@@ -17,8 +17,7 @@ public interface IQueueConsumer : IHostedAmqpConsumer
 public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     where TIntegrationEvent : IIntegrationEvent
 {
-    private readonly Delegate _handler;
-    private readonly TopologyConfig<TIntegrationEvent> _topologyConfig;
+    private readonly Delegate _handler;    
     private readonly IChannelContext _channelContext;
     private Dispatcher<TIntegrationEvent> _dispatcher;
     private CancellationTokenSource _cancellationTokenSource;
@@ -32,8 +31,7 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
         IChannelContext channelContext)
     {
         _handler = handler;
-        _serializer = serializer;
-        _topologyConfig = new TopologyConfig<TIntegrationEvent>();
+        _serializer = serializer;        
         _channelContext = channelContext;
     }
 

@@ -10,13 +10,17 @@ namespace HareQueue.RabbitMq
 {
     public static class HareQueueConfiguration
     {
-        public static IServiceCollection AddHareQueue(this IServiceCollection services, Assembly assembly)
+        public static IServiceCollection AddHareQueue(this IServiceCollection services, Action<ConsumerTopologyRegitry> configureConsumers, Assembly assembly)
         {
-
-            services.AddScoped<IConsumerHandlerRegistry>(sp => new ConsumerHandlerRegistry(assembly, sp));
-            services.AddHostedService<ConsumerServer>();
             services.AddHandlers(assembly);
-            services.AddRabbitMq();            
+            
+            var config = new ConsumerTopologyRegitry();
+            configureConsumers(config);
+
+            services.AddScoped<IConsumerHandlerRegistry>(sp => new ConsumerHandlerRegistry(assembly, sp, config));
+
+            services.AddHostedService<ConsumerServer>();
+            services.AddRabbitMq();
             services.AddAmqpSerializer(new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,

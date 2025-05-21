@@ -9,11 +9,13 @@ public class ConsumerHandlerRegistry : IConsumerHandlerRegistry
 {
     private readonly Assembly _assembly;
     private readonly IServiceProvider _provider;
+    private readonly ConsumerTopologyRegitry _consumerTopologyRegitry;
 
-    public ConsumerHandlerRegistry(Assembly assembly, IServiceProvider provider)
+    public ConsumerHandlerRegistry(Assembly assembly, IServiceProvider provider, ConsumerTopologyRegitry consumerTopologyRegitry)
     {
         _assembly = assembly;
         _provider = provider;
+        _consumerTopologyRegitry = consumerTopologyRegitry;
     }
 
     public IEnumerable<IQueueConsumer> ResolveConsumers()
@@ -28,7 +30,7 @@ public class ConsumerHandlerRegistry : IConsumerHandlerRegistry
 
             if (interfaceType == null) continue;
 
-            var messageType = interfaceType.GetGenericArguments().First();
+            var messageType = interfaceType.GetGenericArguments().First();           
             var consumerHandler = _provider.GetRequiredService(interfaceType);
 
             var method = interfaceType.GetMethod("Handle");
@@ -38,6 +40,10 @@ public class ConsumerHandlerRegistry : IConsumerHandlerRegistry
             var serializer = _provider.GetRequiredService<IAmqpSerializer>();
             var connection = _provider.GetRequiredService<IConnection>();
             var channel = new RabbitMqChannelContext(connection);
+
+            var consumerTopology = _consumerTopologyRegitry.GetConsumerTopology(messageType);
+
+            consumerTopology.
 
             var queueConsumerType = typeof(QueueConsumer<>).MakeGenericType(messageType);
             var queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, handlerDelegate, serializer, channel)!;
