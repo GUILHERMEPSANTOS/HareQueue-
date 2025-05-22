@@ -3,8 +3,15 @@ using HareQueue.RabbitMq.Context;
 
 namespace HareQueue.RabbitMq.Consumer
 {
+    public interface IConsumerTopologyRegistry
+    {
+        void AddConsumer<TIntegrationEvent>(ExchangeType type)
+            where TIntegrationEvent : IIntegrationEvent;
+        ConsumerConfig GetConsumerTopology(Type integrationEvent);
+    }
 
-    public class ConsumerTopologyRegitry
+
+    public class ConsumerTopologyRegitry : IConsumerTopologyRegistry
     {
         private IDictionary<Type, ConsumerConfig> _consumersRegitry = new Dictionary<Type, ConsumerConfig>();
 
@@ -14,7 +21,7 @@ namespace HareQueue.RabbitMq.Consumer
             _consumersRegitry.Add(typeof(TIntegrationEvent), new ConsumerConfig(type));
         }
 
-        public ConsumerConfig GetConsumerTopology(Type integrationEvent)            
+        public ConsumerConfig GetConsumerTopology(Type integrationEvent)
         {
             if (_consumersRegitry.TryGetValue(integrationEvent, out var consumerConfig))
             {

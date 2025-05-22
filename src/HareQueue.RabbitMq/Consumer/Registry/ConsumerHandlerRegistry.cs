@@ -1,26 +1,32 @@
-﻿using HareQueue.RabbitMq.Consumer;
+﻿using HareQueue.RabbitMq.Abstractions;
+using HareQueue.RabbitMq.Consumer;
 using HareQueue.RabbitMq.Context;
 using HareQueue.RabbitMq.Serializer;
+using HareQueue.RabbitMq.Topology;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
-using System.Reflection;
 
 public class ConsumerHandlerRegistry : IConsumerHandlerRegistry
 {
-    private readonly Assembly _assembly;
+    private readonly IAssemblyProvider _assembly;
     private readonly IServiceProvider _provider;
-    private readonly ConsumerTopologyRegitry _consumerTopologyRegitry;
+    private readonly IConsumerTopologyRegistry _consumerTopologyRegitry;
+    private readonly ITopologyConfigResolver _topologyConfigResolver;    
 
-    public ConsumerHandlerRegistry(Assembly assembly, IServiceProvider provider, ConsumerTopologyRegitry consumerTopologyRegitry)
+    public ConsumerHandlerRegistry(IAssemblyProvider assembly,
+        IServiceProvider provider,
+        IConsumerTopologyRegistry consumerTopologyRegitry,
+        ITopologyConfigResolver topologyConfigResolver)
     {
         _assembly = assembly;
         _provider = provider;
         _consumerTopologyRegitry = consumerTopologyRegitry;
+        _topologyConfigResolver = topologyConfigResolver;
     }
 
     public IEnumerable<IQueueConsumer> ResolveConsumers()
     {
-        var consumerTypes = _assembly.DefinedTypes
+        var consumerTypes = _assembly.GetAssembly().DefinedTypes
             .Where(t => typeof(IConsumerHandler).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
 
         foreach (var type in consumerTypes)
@@ -30,7 +36,7 @@ public class ConsumerHandlerRegistry : IConsumerHandlerRegistry
 
             if (interfaceType == null) continue;
 
-            var messageType = interfaceType.GetGenericArguments().First();           
+            var messageType = interfaceType.GetGenericArguments().First();
             var consumerHandler = _provider.GetRequiredService(interfaceType);
 
             var method = interfaceType.GetMethod("Handle");
@@ -41,12 +47,16 @@ public class ConsumerHandlerRegistry : IConsumerHandlerRegistry
             var connection = _provider.GetRequiredService<IConnection>();
             var channel = new RabbitMqChannelContext(connection);
 
-            var consumerTopology = _consumerTopologyRegitry.GetConsumerTopology(messageType);
+            var consumerConfig = _consumerTopologyRegitry.GetConsumerTopology(messageType);
 
-            consumerTopology.
+            var getTopologyMethod = typeof(ITopologyConfigResolver)
+                .GetMethod(nameof(ITopologyConfigResolver.Resolve))
+                .MakeGenericMethod(messageType);
+
+            var topology = getTopologyMethod.Invoke(_topologyConfigResolver, [consumerConfig]) as ITopologyConfigStrategy;
 
             var queueConsumerType = typeof(QueueConsumer<>).MakeGenericType(messageType);
-            var queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, handlerDelegate, serializer, channel)!;
+            var queueConsumer = (IQueueConsumer)Activator.CreateInstance(queueConsumerType, handlerDelegate, serializer, channel, topology)!;
 
             yield return queueConsumer;
         }

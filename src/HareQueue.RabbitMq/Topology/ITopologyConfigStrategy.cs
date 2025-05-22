@@ -3,7 +3,9 @@ using HareQueue.RabbitMq.Context;
 
 namespace HareQueue.RabbitMq.Abstractions
 {
-    public interface ITopologyConfigStrategy<TIntegrationEvent> 
+    public interface ITopologyConfigStrategy;
+
+    public interface ITopologyConfigStrategy<TIntegrationEvent> : ITopologyConfigStrategy
            where TIntegrationEvent : IIntegrationEvent
     {
         string Name { get; }

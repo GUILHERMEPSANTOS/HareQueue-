@@ -1,5 +1,6 @@
 ﻿using HareQueue.RabbitMq.Consumer;
 using HareQueue.RabbitMq.Serializer;
+using HareQueue.RabbitMq.Topology;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 using System.Reflection;
@@ -14,10 +15,12 @@ namespace HareQueue.RabbitMq
         {
             services.AddHandlers(assembly);
             
-            var config = new ConsumerTopologyRegitry();
-            configureConsumers(config);
-
-            services.AddScoped<IConsumerHandlerRegistry>(sp => new ConsumerHandlerRegistry(assembly, sp, config));
+            var registry = new ConsumerTopologyRegitry();
+            configureConsumers(registry);
+            
+            services.AddScoped<ITopologyConfigResolver, TopologyConfigResolver>();
+            services.AddSingleton<IConsumerTopologyRegistry>(registry);
+            services.AddScoped<IConsumerHandlerRegistry, ConsumerHandlerRegistry>();
 
             services.AddHostedService<ConsumerServer>();
             services.AddRabbitMq();

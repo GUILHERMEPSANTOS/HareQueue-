@@ -3,7 +3,6 @@ using HareQueue.RabbitMq.Abstractions.Consumer;
 using HareQueue.RabbitMq.Consumer.Dispatch;
 using HareQueue.RabbitMq.Context;
 using HareQueue.RabbitMq.Serializer;
-using HareQueue.RabbitMq.Topology;
 using RabbitMQ.Client.Events;
 
 namespace HareQueue.RabbitMq.Consumer;
@@ -20,6 +19,7 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     private readonly Delegate _handler;    
     private readonly IChannelContext _channelContext;
     private Dispatcher<TIntegrationEvent> _dispatcher;
+    private ITopologyConfigStrategy<TIntegrationEvent> _topologyConfigStrategy;
     private CancellationTokenSource _cancellationTokenSource;
     private IAmqpSerializer _serializer;
     private bool _isConsuming { get; set; }
@@ -28,11 +28,13 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     public QueueConsumer(
         Delegate handler,
         IAmqpSerializer serializer,
-        IChannelContext channelContext)
+        IChannelContext channelContext,
+        ITopologyConfigStrategy<TIntegrationEvent> topologyConfigStrategy)
     {
         _handler = handler;
-        _serializer = serializer;        
+        _serializer = serializer;
         _channelContext = channelContext;
+        _topologyConfigStrategy = topologyConfigStrategy;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
@@ -56,11 +58,10 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
 
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await _channelContext.ExchangeDeclareAsync(exchange: _topologyConfig.Exchange, durable: true, type: ExchangeType.Direct, autoDelete: false);
-        await _channelContext.QueueDeclareAsync(queue: _topologyConfig.Queue, durable: true, exclusive: false, autoDelete: false);
-        await _channelContext.QueueBindAsync(queue: _topologyConfig.Queue, exchange: _topologyConfig.Exchange, routingKey: _topologyConfig.RoutingKey);
+        await _topologyConfigStrategy.BindAsync(_channelContext, cancellationToken);
+
         await _channelContext.BasicConsumeAsync(
-           queue: _topologyConfig.Queue,
+           queue: _topologyConfigStrategy.Queue,
            autoAck: false,
            arguments: null,
            exclusive: false,
@@ -83,7 +84,7 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     {
         var message = _serializer.Deserialize<TIntegrationEvent>(eventArgs);
 
-        IAmqpContext context = new AmqpContext(eventArgs, _channelContext.Channel, _channelContext.Connection, _topologyConfig.Queue, message, _cancellationTokenSource.Token);
+        IAmqpContext context = new AmqpContext(eventArgs, _channelContext.Channel, _channelContext.Connection, _topologyConfigStrategy.Queue, message, _cancellationTokenSource.Token);
 
         await _dispatcher.DispatchAsync(context);
     }
