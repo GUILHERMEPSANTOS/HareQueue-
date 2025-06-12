@@ -2,11 +2,11 @@
 
 namespace HareQueue.ConsoleApp
 {
-    public class UserCreatedHandler : IConsumerHandler<UserCreatedEvent>
+    public class CreateTimeLineOfUserCreatedHandler : IConsumerHandler<UserCreatedEvent>
     {
         public Task Handle(UserCreatedEvent message, CancellationToken cancellationToken = default)
-        {
+        {            
             return Task.CompletedTask;
         }
-    }
+    }    
 }

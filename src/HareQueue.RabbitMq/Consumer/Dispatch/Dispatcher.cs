@@ -12,18 +12,21 @@ namespace HareQueue.RabbitMq.Consumer.Dispatch
     public class Dispatcher<TIntegrationEvent> : IDispatcher
         where TIntegrationEvent : IIntegrationEvent
     {
-        private readonly Delegate _handler;
+        private readonly List<Delegate> _handlers;
 
-        public Dispatcher(Delegate handler)
+        public Dispatcher(List<Delegate> handlers)
         {
-            _handler = handler;
+            _handlers = handlers;
         }
 
         public async Task DispatchAsync(IAmqpContext context)
         {
             var amqpArgument = new AmqpArgument<TIntegrationEvent>(context);
 
-            _handler.DynamicInvoke(amqpArgument.GetValue(), context.CancellationToken);
+            foreach (var handler in _handlers)
+            {
+                handler.DynamicInvoke(amqpArgument.GetValue(), context.CancellationToken);
+            }
 
             await context.Channel.BasicAckAsync(
                 deliveryTag: context.Request.DeliveryTag,

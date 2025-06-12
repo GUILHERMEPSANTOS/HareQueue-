@@ -12,11 +12,19 @@ namespace HareQueue.RabbitMq.Topology
         public string Queue => Name + ".queue";
         public string RoutingKey => string.Empty;
         public string ExchangeType => Context.ExchangeType.Fanout.ToExchangeName();
+        public const bool Durable = true;
+        public const bool AutoDelete = false;
+        public const bool Exclusive = false;
 
 
-        public Task BindAsync(IChannelContext channelContext, CancellationToken cancellationToken)
+        public async Task BindAsync(IChannelContext channelContext, CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            await channelContext
+                .ExchangeDeclareAsync(exchange: Exchange, type: Context.ExchangeType.Fanout, durable: Durable, autoDelete: AutoDelete, cancellationToken: cancellationToken);
+            await channelContext
+                .QueueDeclareAsync(queue: Queue, durable: Durable, exclusive: Exclusive, autoDelete: AutoDelete, cancellationToken: cancellationToken);
+            await channelContext
+                .QueueBindAsync(queue: Queue, exchange: Exchange, routingKey: RoutingKey, cancellationToken: cancellationToken);
         }
     }
 }

@@ -21,9 +21,9 @@ using var channel = await connection.CreateChannelAsync();
 var message = new UserCreatedEvent { Name = "HareQueue" };
 var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
 
-await channel.ExchangeDeclareAsync(exchange: $"{nameof(UserCreatedEvent)}.exchange", durable: true, type: ExchangeType.Direct, autoDelete: false);
+await channel.ExchangeDeclareAsync(exchange: $"{nameof(UserCreatedEvent)}.exchange", durable: true, type: ExchangeType.Fanout, autoDelete: false);
 
-await channel.BasicPublishAsync(exchange: $"{nameof(UserCreatedEvent)}.exchange", $"{nameof(UserCreatedEvent)}", body);
+await channel.BasicPublishAsync(exchange: $"{nameof(UserCreatedEvent)}.exchange", string.Empty, body);
 
 
 Console.WriteLine("Mensagem enviada com sucesso!");

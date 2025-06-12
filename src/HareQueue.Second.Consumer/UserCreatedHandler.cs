@@ -1,6 +1,7 @@
-﻿using HareQueue.RabbitMq.Consumer;
+﻿using HareQueue.ConsoleApp;
+using HareQueue.RabbitMq.Consumer;
 
-namespace HareQueue.ConsoleApp
+namespace HareQueue.Second.ConsoleApp
 {
     public class UserCreatedHandler : IConsumerHandler<UserCreatedEvent>
     {

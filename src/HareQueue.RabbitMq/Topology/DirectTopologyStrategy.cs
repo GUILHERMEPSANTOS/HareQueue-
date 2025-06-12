@@ -14,7 +14,7 @@ namespace HareQueue.RabbitMq.Topology
         public string ExchangeType => Context.ExchangeType.Direct.ToExchangeName();
         public const bool Durable = true;
         public const bool AutoDelete = false;
-        public const bool Exclusive = true;
+        public const bool Exclusive = false;
 
         public async Task BindAsync(IChannelContext channelContext, CancellationToken cancellationToken)
         {

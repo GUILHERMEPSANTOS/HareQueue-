@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<Import Project="../HareQueue.Build.props" />
-	
+
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-	</PropertyGroup>	
+	</PropertyGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\HareQueue.RabbitMq\HareQueue.RabbitMq.csproj" />

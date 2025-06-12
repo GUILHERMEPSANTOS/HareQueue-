@@ -16,7 +16,7 @@ public interface IQueueConsumer : IHostedAmqpConsumer
 public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     where TIntegrationEvent : IIntegrationEvent
 {
-    private readonly Delegate _handler;    
+    private readonly List<Delegate> _handlers;    
     private readonly IChannelContext _channelContext;
     private Dispatcher<TIntegrationEvent> _dispatcher;
     private ITopologyConfigStrategy<TIntegrationEvent> _topologyConfigStrategy;
@@ -26,12 +26,12 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     private bool _isInitialized { get; set; }
 
     public QueueConsumer(
-        Delegate handler,
+        List<Delegate> handlers,
         IAmqpSerializer serializer,
         IChannelContext channelContext,
         ITopologyConfigStrategy<TIntegrationEvent> topologyConfigStrategy)
     {
-        _handler = handler;
+        _handlers = handlers;
         _serializer = serializer;
         _channelContext = channelContext;
         _topologyConfigStrategy = topologyConfigStrategy;
@@ -41,7 +41,7 @@ public class QueueConsumer<TIntegrationEvent> : IQueueConsumer
     {
         if (_isInitialized) throw new InvalidOperationException("O consumer já foi inicializado!");
 
-        _dispatcher = new Dispatcher<TIntegrationEvent>(_handler);
+        _dispatcher = new Dispatcher<TIntegrationEvent>(_handlers);
 
         if (_channelContext is null)
             throw new Exception("channel com RabbitMq não inicializada");
