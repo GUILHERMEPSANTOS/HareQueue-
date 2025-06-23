@@ -14,7 +14,7 @@ var host = Host.CreateDefaultBuilder()
         services.AddSingleton<IAssemblyProvider, DefaultAssemblyProvider>();
         services.AddHareQueue((consumer) =>
         {
-            consumer.AddConsumer<UserCreatedEvent>(ExchangeType.Fanout);
+            consumer.AddConsumer<UserCreatedEvent>(ExchangeType.Fanout, "user-created-send-email");
 
         }, HareQueue.ConsoleApp.AssemblyReference.Assembly);
 

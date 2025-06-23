@@ -4,18 +4,18 @@ using HareQueue.RabbitMq.Context;
 
 namespace HareQueue.RabbitMq.Topology
 {
-    public class FanoutTopologyStrategy<TIntegrationEvent> : ITopologyConfigStrategy<TIntegrationEvent>
+    public class FanoutTopologyStrategy<TIntegrationEvent>(string queueName) : ITopologyConfigStrategy<TIntegrationEvent>
         where TIntegrationEvent : IIntegrationEvent
     {
+        private readonly string _queueName = queueName ?? throw new ArgumentNullException(nameof(queueName), "Queue name cannot be null for Fanout topology strategy.");
         public string Name => typeof(TIntegrationEvent).Name;
         public string Exchange => Name + ".exchange";
-        public string Queue => Name + ".queue";
+        public string Queue => Name + "." + _queueName + ".queue";
         public string RoutingKey => string.Empty;
         public string ExchangeType => Context.ExchangeType.Fanout.ToExchangeName();
         public const bool Durable = true;
         public const bool AutoDelete = false;
         public const bool Exclusive = false;
-
 
         public async Task BindAsync(IChannelContext channelContext, CancellationToken cancellationToken)
         {

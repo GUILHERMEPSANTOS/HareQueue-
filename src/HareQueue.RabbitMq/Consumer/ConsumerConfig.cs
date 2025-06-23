@@ -5,7 +5,7 @@ namespace HareQueue.RabbitMq.Consumer
 {
     public interface IConsumerTopologyRegistry
     {
-        void AddConsumer<TIntegrationEvent>(ExchangeType type)
+        void AddConsumer<TIntegrationEvent>(ExchangeType type, string? queueName = null)
             where TIntegrationEvent : IIntegrationEvent;
         ConsumerConfig GetConsumerTopology(Type integrationEvent);
     }
@@ -15,10 +15,15 @@ namespace HareQueue.RabbitMq.Consumer
     {
         private IDictionary<Type, ConsumerConfig> _consumersRegitry = new Dictionary<Type, ConsumerConfig>();
 
-        public void AddConsumer<TIntegrationEvent>(ExchangeType type)
+        public void AddConsumer<TIntegrationEvent>(ExchangeType type, string? queueName = null)
             where TIntegrationEvent : IIntegrationEvent
         {
-            _consumersRegitry.Add(typeof(TIntegrationEvent), new ConsumerConfig(type));
+            if (type == ExchangeType.Fanout && string.IsNullOrWhiteSpace(queueName))
+            {
+                throw new ArgumentException("when you using a fanout exchange type, specifying the queue name is mandatory");
+            }
+
+            _consumersRegitry.Add(typeof(TIntegrationEvent), new ConsumerConfig(type, queueName ?? string.Empty));
         }
 
         public ConsumerConfig GetConsumerTopology(Type integrationEvent)
@@ -35,10 +40,28 @@ namespace HareQueue.RabbitMq.Consumer
     public class ConsumerConfig
     {
         public ExchangeType ExchangeType { get; set; }
+        public string? QueueName { get; set; }
 
         public ConsumerConfig(ExchangeType exchangeType)
         {
+            if (exchangeType == ExchangeType.Fanout)
+            {
+                throw new ArgumentException("when you using a fanout exchange type, specifying the queue name is mandatory");
+            }
+
             ExchangeType = exchangeType;
+
+        }
+
+        public ConsumerConfig(ExchangeType exchangeType, string? queueName)
+        {
+            if (exchangeType == ExchangeType.Fanout && string.IsNullOrWhiteSpace(queueName))
+            {
+                throw new ArgumentException("when you using a fanout exchange type, specifying the queue name is mandatory");
+            }
+
+            ExchangeType = exchangeType;
+            QueueName = queueName;
         }
     }
 }

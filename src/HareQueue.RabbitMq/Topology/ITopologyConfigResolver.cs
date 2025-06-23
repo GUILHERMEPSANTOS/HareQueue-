@@ -25,7 +25,7 @@ namespace HareQueue.RabbitMq.Topology
             return consumerConfig.ExchangeType switch
             {
                 Context.ExchangeType.Direct => new DirectTopologyStrategy<TIntegrationEvent>(),
-                Context.ExchangeType.Fanout => new FanoutTopologyStrategy<TIntegrationEvent>()
+                Context.ExchangeType.Fanout => new FanoutTopologyStrategy<TIntegrationEvent>(consumerConfig.QueueName)
             };
         }
     }

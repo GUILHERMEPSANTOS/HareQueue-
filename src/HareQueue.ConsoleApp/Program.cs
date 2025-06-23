@@ -13,7 +13,7 @@ var host = Host.CreateDefaultBuilder()
         services.AddSingleton<IAssemblyProvider, DefaultAssemblyProvider>();
         services.AddHareQueue((consumer) =>
         {
-            consumer.AddConsumer<UserCreatedEvent>(ExchangeType.Fanout);
+            consumer.AddConsumer<UserCreatedEvent>(ExchangeType.Fanout, "userCreated");
 
         }, AssemblyReference.Assembly);
 
